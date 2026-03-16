@@ -70,6 +70,11 @@ dependencies {
 
 }
 
+tasks.withType(Jar).configureEach {
+    archiveBaseName.set(mod_id)
+    archiveVersion.set("${minecraft_version}-${mod_version}")
+}
+
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
     options.compilerArgs += ['-parameters']
