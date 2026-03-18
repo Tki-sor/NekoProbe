@@ -51,7 +51,7 @@ public class ProbeIOManager {
         } catch (Exception ignored) {}
     }
 
-    public static void writeToDiskForEnv(ScriptType env, String eventsDtsContent, String globalJavaTypeContent, Map<String, Queue<String>> fileContents) throws Exception {
+    public static void writeToDiskForEnv(ScriptType env, String eventsDtsContent, String globalJavaTypeContent, String bindingsDtsContent, Map<String, Queue<String>> fileContents) throws Exception {
         Path envDir = NekoJSPaths.PROBE_DIR.resolve(env.name().toLowerCase());
         Path globalsDir = envDir.resolve("probe-types").resolve("globals");
         Path packagesDir = envDir.resolve("probe-types").resolve("packages");
@@ -60,6 +60,8 @@ public class ProbeIOManager {
         Files.createDirectories(packagesDir);
 
         Files.writeString(globalsDir.resolve("events.d.ts"), eventsDtsContent);
+        Files.writeString(globalsDir.resolve("bindings.d.ts"), bindingsDtsContent);
+        Files.writeString(globalsDir.resolve("java_type.d.ts"), globalJavaTypeContent);
 
         StringBuilder packagesIndexContent = new StringBuilder("// === NekoJS Packages ===\n");
 
@@ -73,9 +75,12 @@ public class ProbeIOManager {
             packagesIndexContent.append("/// <reference path=\"./").append(fileGroupKey).append(".d.ts\" />\n");
         }
         Files.writeString(packagesDir.resolve("index.d.ts"), packagesIndexContent.toString());
-        Files.writeString(globalsDir.resolve("java_type.d.ts"), globalJavaTypeContent);
+
         Files.writeString(globalsDir.resolve("index.d.ts"),
-                "// === NekoJS Globals ===\n/// <reference path=\"./events.d.ts\" />\n/// <reference path=\"./java_type.d.ts\" />\n");
+                "// === NekoJS Globals ===\n" +
+                        "/// <reference path=\"./events.d.ts\" />\n" +
+                        "/// <reference path=\"./bindings.d.ts\" />\n" +
+                        "/// <reference path=\"./java_type.d.ts\" />\n");
     }
 
     private static String calculateModsHash() {

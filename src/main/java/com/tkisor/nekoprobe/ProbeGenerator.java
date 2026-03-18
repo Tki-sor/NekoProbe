@@ -1,7 +1,8 @@
 package com.tkisor.nekoprobe;
 
-import com.tkisor.nekojs.api.EventGroup;
-import com.tkisor.nekojs.api.NekoEventGroups;
+import com.tkisor.nekojs.api.data.EventGroup;
+import com.tkisor.nekojs.api.data.NekoBindings;
+import com.tkisor.nekojs.api.data.NekoEventGroups;
 import com.tkisor.nekojs.script.ScriptType;
 
 import java.util.*;
@@ -32,6 +33,8 @@ public class ProbeGenerator {
             eventsContents.put(env, buildEventsDts(env, scanQueue));
         }
 
+        String bindingsContent = buildBindingsDts(scanQueue);
+
         ClassScanner.seedTargetedPackages(scanQueue);
 
         while (!scanQueue.isEmpty()) {
@@ -49,7 +52,14 @@ public class ProbeGenerator {
                 String classCode = TSClassGenerator.generate(targetClass, scanQueue);
 
                 fileContents.computeIfAbsent(fileGroupKey, k -> new ConcurrentLinkedQueue<>()).add(classCode);
-                globalClassesMap.put(targetClass.getName(), targetClass.getName().replace('$', '.'));
+
+                String realName = targetClass.getName();
+                String tsName = realName.replace('$', '.');
+
+                globalClassesMap.put(realName, tsName);
+                if (realName.contains("$")) {
+                    globalClassesMap.put(tsName, tsName);
+                }
             });
         }
 
@@ -58,7 +68,7 @@ public class ProbeGenerator {
 
         Arrays.stream(ScriptType.values()).parallel().forEach(env -> {
             try {
-                ProbeIOManager.writeToDiskForEnv(env, eventsContents.get(env), globalJavaTypeContent, fileContents);
+                ProbeIOManager.writeToDiskForEnv(env, eventsContents.get(env), globalJavaTypeContent, bindingsContent, fileContents);
             } catch (Exception e) {
                 NekoProbe.LOGGER.error("[NekoProbe] 写入环境 {} 失败", env.name(), e);
             }
@@ -68,6 +78,48 @@ public class ProbeGenerator {
 
         long endTime = System.currentTimeMillis();
         NekoProbe.LOGGER.info("[NekoProbe] 探针生成完毕！总耗时: {} ms，共解析了 {} 个类！", (endTime - startTime), processedClasses.size());
+    }
+
+    private static String buildBindingsDts(Queue<Class<?>> scanQueue) {
+        StringBuilder sb = new StringBuilder("// === NekoJS Global Bindings ===\n\n");
+
+        Map<String, Object> allBindings = NekoBindings.all();
+
+        for (Map.Entry<String, Object> entry : allBindings.entrySet()) {
+            String bindingName = entry.getKey();
+            Object boundObject = entry.getValue();
+
+            if (boundObject != null) {
+                Class<?> clazz = boundObject.getClass();
+                scanQueue.add(clazz);
+
+                sb.append("declare namespace ").append(bindingName).append(" {\n");
+
+                try {
+                    for (java.lang.reflect.Field field : clazz.getFields()) {
+                        if (java.lang.reflect.Modifier.isStatic(field.getModifiers())) {
+                            String fieldType = TSTypeMapper.mapType(field.getGenericType(), scanQueue);
+                            sb.append("    let ").append(field.getName()).append(": ").append(fieldType).append(";\n");
+                        }
+                    }
+
+                    for (java.lang.reflect.Method method : clazz.getMethods()) {
+                        if (method.getDeclaringClass() == Object.class) continue;
+
+                        String returnType = TSTypeMapper.mapType(method.getGenericReturnType(), scanQueue);
+                        String params = TSTypeMapper.buildParams(method, scanQueue);
+                        String typeParams = "";
+                        try { typeParams = TSTypeMapper.buildTypeParams(method.getTypeParameters()); } catch (Throwable ignored) {}
+
+                        sb.append("    function ").append(method.getName()).append(typeParams)
+                                .append("(").append(params).append("): ").append(returnType).append(";\n");
+                    }
+                } catch (Throwable ignored) {}
+
+                sb.append("}\n\n");
+            }
+        }
+        return sb.toString();
     }
 
     private static String buildEventsDts(ScriptType env, Queue<Class<?>> scanQueue) {
