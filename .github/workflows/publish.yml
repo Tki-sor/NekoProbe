@@ -1,0 +1,63 @@
+name: Auto Build and Publish
+
+on:
+  push:
+    branches: [ "master" ] # 根据你的默认分支名称修改
+
+jobs:
+  # 阶段 1：检测 Commit 记录
+  check-commit:
+    runs-on: ubuntu-latest
+    # 将提取到的结果作为输出，传递给下一个 Job
+    outputs:
+      should_publish: ${{ steps.match.outputs.should_publish }}
+      version: ${{ steps.match.outputs.version }}
+    steps:
+      - name: Extract version from commit message
+        id: match
+        run: |
+          # 获取当前 push 的 commit message
+          COMMIT_MSG="${{ github.event.head_commit.message }}"
+          
+          # 使用正则匹配 "update x.x.x" 格式，提取版本号
+          if [[ "$COMMIT_MSG" =~ update ([0-9a-zA-Z.-]+) ]]; then
+            echo "Matched version: ${BASH_REMATCH[1]}"
+            echo "should_publish=true" >> $GITHUB_OUTPUT
+            echo "version=${BASH_REMATCH[1]}" >> $GITHUB_OUTPUT
+          else
+            echo "No 'update x.x.x' pattern found. Skipping build."
+            echo "should_publish=false" >> $GITHUB_OUTPUT
+          fi
+
+  # 阶段 2：编译 Mod 并发布 Release
+  build-and-release:
+    needs: check-commit
+    # 只有当上一个 Job 输出了 true 时，才会执行编译和发布
+    if: needs.check-commit.outputs.should_publish == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # 必须赋予写入权限才能创建 Release
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: '25' # 较新的 NeoForge 通常使用 Java 21，根据需要调整
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Build Mod
+        run: ./gradlew build # 执行 Gradle 构建
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.check-commit.outputs.version }}
+          name: NekoJS v${{ needs.check-commit.outputs.version }}
+          body: "Automated release triggered by commit.\n\nCommit Message: ${{ github.event.head_commit.message }}"
+          files: build/libs/*.jar # 提取构建生成的 jar 包
