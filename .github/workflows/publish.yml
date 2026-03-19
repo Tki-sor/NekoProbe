@@ -61,7 +61,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ needs.check-commit.outputs.version }}
-          name: NekoJS v${{ needs.check-commit.outputs.version }}
+          name: NekoProbe v${{ needs.check-commit.outputs.version }}
           body: "Automated release triggered by commit.\n\nCommit Message: ${{ github.event.head_commit.message }}"
           # 修复 3：规避 sources.jar 等附属文件（假设你的主 jar 叫 nekojs-...）
           # 如果你确实想上传所有 jar，可以改回 build/libs/*.jar
