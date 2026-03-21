@@ -66,7 +66,7 @@ sourceSets.main.resources { srcDir 'src/generated/resources' }
 
 dependencies {
     implementation files("libs/GraalJS-25.0.1-neoforge.jar")
-    implementation files("libs/nekojs-1.26.1.0.0-alpha-1.0.2.jar")
+    implementation files("libs/nekojs-1.26.1.0.0-alpha-1.0.5.jar")
 
 }
 

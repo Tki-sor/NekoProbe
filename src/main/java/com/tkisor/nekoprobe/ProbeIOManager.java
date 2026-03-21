@@ -59,28 +59,34 @@ public class ProbeIOManager {
         Files.createDirectories(globalsDir);
         Files.createDirectories(packagesDir);
 
+        // 1. 写入 globals 下的文件
         Files.writeString(globalsDir.resolve("events.d.ts"), eventsDtsContent);
         Files.writeString(globalsDir.resolve("bindings.d.ts"), bindingsDtsContent);
         Files.writeString(globalsDir.resolve("java_type.d.ts"), globalJavaTypeContent);
 
-        StringBuilder packagesIndexContent = new StringBuilder("// === NekoJS Packages ===\n");
+        // 🌟 2. 动态生成并写入 globals 的 index.d.ts
+        String globalsIndex = buildIndexDts("NekoJS Globals", "events.d.ts", "bindings.d.ts", "java_type.d.ts");
+        Files.writeString(globalsDir.resolve("index.d.ts"), globalsIndex);
 
+        // 3. 写入 packages 下的文件
         fileContents.entrySet().parallelStream().forEach(entry -> {
             try {
                 Files.writeString(packagesDir.resolve(entry.getKey() + ".d.ts"), String.join("", entry.getValue()));
             } catch (Exception ignored) {}
         });
 
-        for (String fileGroupKey : fileContents.keySet()) {
-            packagesIndexContent.append("/// <reference path=\"./").append(fileGroupKey).append(".d.ts\" />\n");
-        }
-        Files.writeString(packagesDir.resolve("index.d.ts"), packagesIndexContent.toString());
+        // 🌟 4. 动态生成并写入 packages 的 index.d.ts
+        String[] packageFiles = fileContents.keySet().stream().map(key -> key + ".d.ts").toArray(String[]::new);
+        String packagesIndex = buildIndexDts("NekoJS Packages", packageFiles);
+        Files.writeString(packagesDir.resolve("index.d.ts"), packagesIndex);
+    }
 
-        Files.writeString(globalsDir.resolve("index.d.ts"),
-                "// === NekoJS Globals ===\n" +
-                        "/// <reference path=\"./events.d.ts\" />\n" +
-                        "/// <reference path=\"./bindings.d.ts\" />\n" +
-                        "/// <reference path=\"./java_type.d.ts\" />\n");
+    private static String buildIndexDts(String title, String... fileNames) {
+        StringBuilder sb = new StringBuilder("// === ").append(title).append(" ===\n");
+        for (String fileName : fileNames) {
+            sb.append("/// <reference path=\"./").append(fileName).append("\" />\n");
+        }
+        return sb.toString();
     }
 
     private static String calculateModsHash() {

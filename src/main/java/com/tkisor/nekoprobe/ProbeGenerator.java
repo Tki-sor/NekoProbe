@@ -1,8 +1,9 @@
 package com.tkisor.nekoprobe;
 
-import com.tkisor.nekojs.api.data.EventGroup;
 import com.tkisor.nekojs.api.data.NekoBindings;
-import com.tkisor.nekojs.api.data.NekoEventGroups;
+import com.tkisor.nekojs.api.event.EventGroup;
+import com.tkisor.nekojs.api.event.NekoEventGroups;
+import com.tkisor.nekojs.api.event.EventBusJS; // 🌟 新增导入
 import com.tkisor.nekojs.script.ScriptType;
 
 import java.util.*;
@@ -126,11 +127,21 @@ public class ProbeGenerator {
         StringBuilder sb = new StringBuilder("// === NekoJS Events ===\n\n");
         for (EventGroup g : NekoEventGroups.all().values()) {
             sb.append("declare const ").append(g.name()).append(": {\n");
-            for (String k : g.getHandlerKeys()) {
+
+            for (Map.Entry<String, EventBusJS<?, ?>> entry : g.viewBuses().entrySet()) {
+                String k = entry.getKey();
+                EventBusJS<?, ?> bus = entry.getValue();
+
                 if (!g.isHandlerValidFor(k, env)) continue;
-                String type = TSTypeMapper.mapType(g.getEventType(k), scanQueue);
+
+                Class<?> eventClass = bus.bus().eventType();
+                boolean isTargeted = bus.canDispatch();
+
+                String type = TSTypeMapper.mapType(eventClass, scanQueue);
+
                 sb.append("    ").append(k).append("(handler: (event: ").append(type).append(") => void): void;\n");
-                if (g.isTargeted(k)) {
+
+                if (isTargeted) {
                     sb.append("    ").append(k).append("(target: string, handler: (event: ").append(type).append(") => void): void;\n");
                 }
             }
